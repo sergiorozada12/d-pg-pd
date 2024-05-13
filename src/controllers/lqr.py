@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from scipy.linalg import solve_discrete_are
 
 
@@ -7,13 +8,11 @@ class Lqr:
             self,
             A: np.ndarray,
             B: np.ndarray,
-            Q: np.ndarray,
+            G: np.ndarray,
             R: np.ndarray,
-            s_r: np.ndarray
         ) -> None:
-        P = solve_discrete_are(A, B, Q, R)
-        self.K = np.dot(np.dot(np.linalg.inv(R), B.T), P)
-        self.s_r = s_r
+        P = torch.tensor(solve_discrete_are(A, B, G, R))
+        self.K = - torch.inverse(R + B.T @ P @ B) @ B.T @ P @ A
 
     def pi(self, s: np.ndarray) -> np.ndarray:
-        return (self.s_r - s) @ self.K.T
+        return s @ self.K.T
