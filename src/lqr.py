@@ -43,5 +43,5 @@ class Lqr:
         return s @ P @ s
 
     @staticmethod
-    def get_Q(s: Tensor, a: Tensor, H: Tensor) -> float:
+    def calculate_Q(s: Tensor, a: Tensor, H: Tensor) -> float:
         return cat((s, a), dim=0) @ H @ cat((s, a), dim=0) 
