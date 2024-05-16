@@ -14,7 +14,9 @@ class Lqr:
         self.gamma = gamma
 
     def calculate_optimal_P(self, G: Tensor, R: Tensor) -> Tensor:
-        return tensor(solve_discrete_are(self.A, self.B, G, R))
+        A_hat = (self.gamma ** (1 / 2)) * self.A
+        B_hat = (self.gamma ** (1 / 2)) * self.B
+        return tensor(solve_discrete_are(A_hat, B_hat, G, R))
 
     def calculate_P(self, K: Tensor, G: Tensor, R: Tensor) -> Tensor:
         ds = self.A.shape[0]
@@ -36,7 +38,7 @@ class Lqr:
         return H
     
     def calculate_optimal_K(self, R: Tensor, P: Tensor) -> Tensor:
-        return - inverse(R + self.B.T @ P @ self.B) @ self.B.T @ P @ self.A
+        return - self.gamma * inverse(R + self.B.T @ P @ self.B) @ self.B.T @ P @ self.A
 
     @staticmethod
     def calculate_V(s: Tensor, P: Tensor) -> float:

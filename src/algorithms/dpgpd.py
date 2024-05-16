@@ -33,7 +33,7 @@ class Dpgpd:
         self.R2 = R2
 
         self.lqr = Lqr(env.A, env.B, gamma)
-        self.sampler = Sampler()
+        self.sampler = Sampler(env, gamma)
 
     def primal_update(self, R: Tensor, K: Tensor, P: Tensor) -> Tensor:
         H_odiag = self.gamma * self.env.B.T @ P @ self.env.A
@@ -41,7 +41,7 @@ class Dpgpd:
         return - inverse(2 * H_diag + 2 * R - self.I_eta) @ (2 * H_odiag + self.I_eta @ K)
 
     def dual_update(self, P: Tensor, lmbda: Tensor, n: int) -> Tensor:
-        v = self.sampler.estimate_V_rho(self.env, P, n)
+        v = self.sampler.estimate_V_rho(P, n)
         return clamp(lmbda - self.eta * (v - self.b + self.tau * lmbda), min=0)
 
     def train_unconstrained(self, epochs: int, n: int) -> Tuple[Tensor, List[float], List[float]]:
@@ -51,8 +51,8 @@ class Dpgpd:
             P_primal = self.lqr.calculate_P(K, self.G1, self.R1)
             P_dual = self.lqr.calculate_P(K, self.G2, self.R2)
 
-            loss_primal = self.sampler.estimate_V_rho(self.env, P_primal, n)
-            loss_dual = self.sampler.estimate_V_rho(self.env, P_dual, n)
+            loss_primal = self.sampler.estimate_V_rho(P_primal, n)
+            loss_dual = self.sampler.estimate_V_rho(P_dual, n)
 
             losses_primal.append(loss_primal)
             losses_dual.append(loss_dual)
@@ -72,8 +72,8 @@ class Dpgpd:
             P_primal_unconstrained = self.lqr.calculate_P(K, self.G1, self.R1)
             P_dual = self.lqr.calculate_P(K, self.G2, self.R2)
 
-            loss_primal = self.sampler.estimate_V_rho(self.env, P_primal_unconstrained, n)
-            loss_dual = self.sampler.estimate_V_rho(self.env, P_dual, n)
+            loss_primal = self.sampler.estimate_V_rho(P_primal_unconstrained, n)
+            loss_dual = self.sampler.estimate_V_rho(P_dual, n)
 
             losses_primal.append(loss_primal)
             losses_dual.append(loss_dual)
