@@ -10,7 +10,7 @@ from src.lqr import Lqr
 from src.sampling import Sampler
 
 
-RNG_SAMPLING = [-5, 5]
+RNG_SAMPLING = [-10, 10]
 
 
 class ADpgpdExact:
@@ -145,11 +145,12 @@ class ADpgpdExact:
             P_primal = self.lqr.calculate_P(K, self.G1, self.R1)
             P_dual = self.lqr.calculate_P(K, self.G2, self.R2)
 
-            loss_primal = self.sampler.estimate_V_rho(P_primal, n_rho)
-            loss_dual = self.sampler.estimate_V_rho(P_dual, n_rho)
+            if e % 10 == 0:
+                loss_primal = self.sampler.estimate_V_rho(P_primal, n_rho)
+                loss_dual = self.sampler.estimate_V_rho(P_dual, n_rho)
 
-            losses_primal.append(loss_primal)
-            losses_dual.append(loss_dual)
+                losses_primal.append(loss_primal)
+                losses_dual.append(loss_dual)
 
             theta = self.policy_evaluation(K, Gl, Rl, n_pe)
             K = self.primal_update(theta)

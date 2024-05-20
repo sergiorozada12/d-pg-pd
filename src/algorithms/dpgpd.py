@@ -72,11 +72,12 @@ class Dpgpd:
             P_primal_unconstrained = self.lqr.calculate_P(K, self.G1, self.R1)
             P_dual = self.lqr.calculate_P(K, self.G2, self.R2)
 
-            loss_primal = self.sampler.estimate_V_rho(P_primal_unconstrained, n)
-            loss_dual = self.sampler.estimate_V_rho(P_dual, n)
+            if e % 10 == 0:
+                loss_primal = self.sampler.estimate_V_rho(P_primal_unconstrained, n)
+                loss_dual = self.sampler.estimate_V_rho(P_dual, n)
 
-            losses_primal.append(loss_primal)
-            losses_dual.append(loss_dual)
+                losses_primal.append(loss_primal)
+                losses_dual.append(loss_dual)
 
             K = self.primal_update(Rl, K, P_primal)
             lmbda = self.dual_update(P_dual, lmbda, n)

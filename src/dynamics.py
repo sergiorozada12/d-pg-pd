@@ -1,6 +1,7 @@
 from typing import Tuple
 import numpy as np
 import torch
+from torch import Tensor
 
 from src.config import Config
 
@@ -58,8 +59,8 @@ class RobotWorld:
         )
         return self.s
 
-    def step(self, u: np.ndarray) -> np.ndarray:
-        noise = torch.tensor(
+    def generate_noise(self, size: int) -> Tensor:
+        return torch.tensor(
             self.rng.normal(
             scale=np.array(
                 [
@@ -69,9 +70,13 @@ class RobotWorld:
                     Config.noise_vel
                 ]
             ) * Config.time_step,
-            size=self.s.shape[0],
+            size=size,
         )
         )
-        self.s = self.s @ self.A.T + u @ self.B.T + noise
+
+    def step(self, u: np.ndarray) -> np.ndarray:
+        noise = self.generate_noise(self.s.shape[0])
+        self.s_noiseless = self.s @ self.A.T + u @ self.B.T 
+        self.s = self.s_noiseless + noise
         #self.s = torch.clip(self.s, self.boundaries[:, 0], self.boundaries[:, 1])
         return self.s
