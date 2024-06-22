@@ -7,27 +7,12 @@ from src.config import Config
 
 
 class RobotWorld:
-    def __init__(self) -> None:
+    def __init__(self, range_pos, range_vel) -> None:
         self.s_r = torch.tensor(Config.s_r)
         self.rng = np.random.default_rng()
+        self.range_pos = range_pos
+        self.range_vel = range_vel
         self.A, self.B = self.generate_dynamics(Config.time_step)
-        self.boundaries = torch.tensor(
-            [
-                Config.x_range,
-                Config.y_range,
-                Config.vx_range,
-                Config.vy_range,
-            ]
-        ).double()
-
-    def generate_initial_point(self, x_range, y_range, vx_range, vy_range) -> np.ndarray:
-        s_0 = torch.tensor([
-            self.rng.uniform(*x_range),
-            self.rng.uniform(*y_range),
-            self.rng.uniform(*vx_range),
-            self.rng.uniform(*vy_range),
-        ]).double()
-        return (s_0 - self.s_r)
 
     def generate_dynamics(self, dt: float) -> Tuple[np.ndarray, np.ndarray]:
         A = torch.tensor(
@@ -50,13 +35,14 @@ class RobotWorld:
 
         return A, B
 
-    def reset(self):
-        self.s = self.generate_initial_point(
-            Config.x_range,
-            Config.y_range,
-            Config.vx_range,
-            Config.vy_range
-        )
+    def reset(self, n_samples: int=1):
+        s = np.stack([
+            self.rng.uniform(self.range_pos[0], self.range_pos[1], n_samples),
+            self.rng.uniform(self.range_pos[0], self.range_pos[1], n_samples),
+            self.rng.uniform(self.range_vel[0], self.range_vel[1], n_samples),
+            self.rng.uniform(self.range_vel[0], self.range_vel[1], n_samples),
+        ])
+        self.s = torch.from_numpy(s).double().T
         return self.s
 
     def generate_noise(self, size: int) -> Tensor:
@@ -75,8 +61,53 @@ class RobotWorld:
         )
 
     def step(self, u: np.ndarray) -> np.ndarray:
-        noise = self.generate_noise(self.s.shape[0])
+        noise = self.generate_noise(self.s.shape)
         self.s_noiseless = self.s @ self.A.T + u @ self.B.T 
         self.s = self.s_noiseless + noise
-        #self.s = torch.clip(self.s, self.boundaries[:, 0], self.boundaries[:, 1])
+        return self.s
+
+
+class InventoryControl():
+    def __init__(self, range_assets, range_demand, range_acq) -> None:
+        self.rng = np.random.default_rng()
+        self.range_assets = range_assets
+        self.range_demand = range_demand
+        self.range_acq = range_acq
+
+    def reset(self, n_samples: int=1):
+        self.demand = self.generate_noise([n_samples, 4])
+
+        s = np.concatenate([
+            self.rng.uniform(self.range_assets[0], self.range_assets[1], (n_samples, 4)),
+            self.rng.uniform(self.range_demand[0], self.range_demand[1], (n_samples, 4)),
+            self.rng.uniform(self.range_acq[0], self.range_acq[1], (n_samples, 4)),
+        ], axis=1)
+        self.s = torch.from_numpy(s).double()
+        return self.s
+
+    def generate_noise(self, size: int) -> Tensor:
+        return torch.tensor(
+            self.rng.normal(
+                loc=10,
+                scale=np.array(
+                    [
+                        Config.noise_asset,
+                        Config.noise_asset,
+                        Config.noise_asset,
+                        Config.noise_asset,
+                    ]
+                ),
+                size=size,
+        )
+        ).clip(min=0)
+
+    def step(self, u: np.ndarray) -> np.ndarray:
+        u = u.clip(min=0)
+
+        self.s[:, :4] = torch.clip(self.s[:, :4] + u - self.demand, min=0.0)
+        self.s[:, 4:8] = self.demand
+        self.s[:, 8:] = u
+
+        self.demand = self.generate_noise([self.s.shape[0], 4])
+
         return self.s

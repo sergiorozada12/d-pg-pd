@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Callable
 from torch import zeros, Tensor
 
 from src.dynamics import RobotWorld
@@ -10,8 +10,8 @@ class Sampler:
         self.gamma = gamma
 
     def sample_trajectory(self, K: Tensor, T: int) -> Tuple[Tensor, Tensor]:
-        states = zeros([T, 4])
-        actions = zeros([T, 2])
+        states = zeros([T, K.shape[1]])
+        actions = zeros([T, K.shape[0]])
 
         s = self.env.reset()
         for i in range(0, T):
@@ -24,46 +24,36 @@ class Sampler:
             s = sp
         return states, actions
 
-    def rollout_V(self, s: Tensor, K: Tensor, n: int, G: Tensor, R: Tensor) -> float:
+    def rollout_V(self, s: Tensor, K: Tensor, n: int, reward_fn: Callable) -> float:
+        self.env.reset(s.shape[0])
         self.env.s = s
         v = 0
         for i in range(n):
             a = s @ K.T
-            sp = self.env.step(a)
-
-            r = s @ G @ s + a @ R @ a
-            v += (self.gamma**i) * r
-
-            s = sp
+            v += (self.gamma ** i) * reward_fn(self.env, a)
+            s = self.env.step(a)
         return v
 
-    def rollout_Q(self, s: Tensor, a: Tensor, K: Tensor, n: int, G: Tensor, R: Tensor) -> float:
+    def rollout_Q(self, s: Tensor, a: Tensor, K: Tensor, n: int, reward_fn: Callable) -> float:
+        self.env.reset(s.shape[0])
         self.env.s = s
-        sp = self.env.step(a)
-        r = s @ G @ s + a @ R @ a
-        s = sp
-
-        q = r
+        q = reward_fn(self.env, a)
+        s = self.env.step(a)
         for i in range(1, n):
             a = s @ K.T
-            sp = self.env.step(a)
+            q += (self.gamma**i) * reward_fn(self.env, a)
+            s = self.env.step(a)
+        return q.detach()
 
-            r = s @ G @ s + a @ R @ a
-            q += (self.gamma**i) * r
+    def estimate_V_rho_closed(self, P: Tensor, n: int) -> float:
+        s = self.env.reset(n)
+        return ((s @ P) * s).sum(dim=1).mean().item()
 
-            s = sp
-        return q.detach().item()
-
-    def estimate_V_rho(self, P: Tensor, n: int) -> float:
+    def estimate_V_rho_rollout(self, K: Tensor, n_samples: int, n_rollout: int, reward_fn: Callable) -> float:
+        s = self.env.reset(n_samples)
         v = 0
-        for _ in range(n):
-            s = self.env.reset()
-            v += s @ P @ s
-        return (v / n).detach().item()
-
-    def rollout_V_rho(self, K: Tensor, G: Tensor, R: Tensor, n_samples: int, n_rollout) -> float:
-        v = 0
-        for _ in range(n_samples):
-            s = self.env.reset()
-            v += self.rollout_V(s, K, n_rollout, G, R)
-        return (v / n_samples).detach().item()
+        for i in range(n_rollout):
+            a = s @ K.T
+            v += (self.gamma ** i) * reward_fn(self.env, a)
+            s = self.env.step(a)
+        return v.mean().detach().item()

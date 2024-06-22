@@ -10,4 +10,5 @@ class Config:
     vy_range: Tuple[int, int] = [-.1, .1]
     noise_pos: float = 1.0
     noise_vel: float = 1.0
+    noise_asset: float = 5.0
     s_r: List[int] = [0, 0, 0, 0]
