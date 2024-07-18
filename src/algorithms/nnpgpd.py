@@ -29,8 +29,8 @@ class MLPCritic(nn.Module):
         self.fc1 = nn.Linear(state_dim + action_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, 1)
 
-        nn.init.normal_(self.fc1.weight, mean=0.0, std=0.01)
-        nn.init.normal_(self.fc2.weight, mean=0.0, std=0.01)
+        nn.init.normal_(self.fc1.weight, mean=0.0, std=0.1)
+        nn.init.normal_(self.fc2.weight, mean=0.0, std=0.1)
 
     def forward(self, state: Tensor, action: Tensor) -> Tensor:
         x = cat([state, action], dim=-1)
@@ -106,9 +106,31 @@ class Nnpgpd:
         num_samples: int,
         num_rollout: int,
         num_rho: int,
+        num_init: int=10,
         ) -> Tuple[List[float], List[float]]:
         lmbda = zeros(1)
         loss_primal, loss_dual = [], []
+
+        batch_size = 32
+        state, action = self.starting_pos_fn(10_000)
+        target_q = self.rollout_Q(state, action, num_rollout, lmbda)
+        num_batches = (state.shape[0] + batch_size - 1) // batch_size
+        for _ in range(num_init):
+            for i in range(num_batches):
+                start_idx = i * batch_size
+                end_idx = start_idx + batch_size
+
+                batch_state = state[start_idx:end_idx]
+                batch_action = action[start_idx:end_idx]
+                batch_q = target_q[start_idx:end_idx]
+
+                q_value = self.critic(batch_state.detach(), batch_action.detach()).squeeze()
+                critic_loss = F.mse_loss(q_value, batch_q.detach())
+                self.critic_optimizer.zero_grad()
+                critic_loss.backward()
+                self.critic_optimizer.step()
+        print(f"Initial CLoss - {critic_loss.detach().item()}")
+
         for epoch in range(num_epochs):
             for episode in range(num_episodes):
                 state, action = self.starting_pos_fn(num_samples)
