@@ -21,6 +21,7 @@ class ADpgpdSampled:
             b: float,
             alpha: float,
             primal_reward_fn: Callable,
+            primal_reward_reg_fn: Callable,
             dual_reward_fn: Callable,
             starting_pos_fn: Callable,
         ) -> None:
@@ -33,6 +34,7 @@ class ADpgpdSampled:
         self.ds, self.da = ds, da
 
         self.primal_reward_fn = primal_reward_fn
+        self.primal_reward_reg_fn = primal_reward_reg_fn
         self.dual_reward_fn = dual_reward_fn
         self.starting_pos_fn = starting_pos_fn
 
@@ -44,7 +46,7 @@ class ADpgpdSampled:
         X = einsum("bi,bj->bij", s_a, s_a).view(n_samples, (self.ds + self.da)**2)
 
         def reward_fn(env, action):
-            return self.primal_reward_fn(env, action) + lmbda * self.dual_reward_fn(env, action)
+            return self.primal_reward_fn(env, action) + self.primal_reward_reg_fn(env, action) + lmbda * self.dual_reward_fn(env, action)
 
         a_pi = s @ K.T
         q = self.sampler.rollout_Q(s, a, K, n_rollout, reward_fn=reward_fn)

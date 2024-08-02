@@ -1,4 +1,5 @@
 from typing import List, Tuple
+import numpy as np
 from numpy.random import default_rng
 from torch import (
     eye, inverse, zeros, clamp, concat, cartesian_prod, tensor, ger, flatten, diag, Tensor
@@ -26,6 +27,7 @@ class ADpgpd:
             G2: Tensor,
             R1: Tensor,
             R2: Tensor,
+            H: Tensor,
         ) -> None:
         self.env = env
         self.eta = eta
@@ -40,6 +42,7 @@ class ADpgpd:
         self.G2 = G2
         self.R1 = R1
         self.R2 = R2
+        self.H = H
 
         self.lqr = Lqr(env.A, env.B, gamma)
         self.sampler = Sampler(env, gamma)
@@ -119,7 +122,7 @@ class ADpgpd:
         theta = zeros((self.ds + self.da)**2)
         K = self.primal_update(theta)
         for e in range(epochs):
-            P_primal = self.lqr.calculate_P(K, self.G1, self.R1)
+            P_primal = self.lqr.calculate_P(K, self.G1, self.R1 + self.H)
             P_dual = self.lqr.calculate_P(K, self.G2, self.R2)
 
             loss_primal = self.sampler.estimate_V_rho_closed(P_primal, n_rho)
@@ -128,7 +131,7 @@ class ADpgpd:
             losses_primal.append(loss_primal)
             losses_dual.append(loss_dual)
 
-            theta = self.policy_evaluation(K, self.G1, self.R1, n_pe)
+            theta = self.policy_evaluation(K, self.G1, self.R1 + self.H, n_pe)
             K = self.primal_update(theta)
 
             print(f"Episode {e}/{epochs} - Return {loss_primal} \r", end='')
@@ -140,7 +143,7 @@ class ADpgpd:
         K = self.primal_update(theta)
         lmbda = zeros(1)
         for e in range(epochs):
-            Gl, Rl = self.G1 + lmbda * self.G2, self.R1 + lmbda * self.R2
+            Gl, Rl = self.G1 + lmbda * self.G2, self.R1 + self.H + lmbda * self.R2
 
             P_primal = self.lqr.calculate_P(K, self.G1, self.R1)
             P_dual = self.lqr.calculate_P(K, self.G2, self.R2)
@@ -156,5 +159,27 @@ class ADpgpd:
             K = self.primal_update(theta)
             lmbda = self.dual_update(P_dual, lmbda, n_rho)
 
-            print(f'Episode {e}/{epochs} - Return {loss_primal} - Constrain {loss_dual} \r', end='')
+            print(f'Episode {e}/{epochs} - Return {loss_primal} - Constrain {loss_dual} - Lambda {lmbda.detach().item()} \r', end='')
         return K, lmbda, losses_primal, losses_dual
+
+    def evaluate_duality_gap(self, V_primal_opt: float, epochs: int, n_pe: int, n_rho: int):
+        theta = zeros((self.ds + self.da)**2)
+        K = self.primal_update(theta)
+        lmbda = zeros(1)
+        gaps = []
+        for e in range(epochs):
+            Gl, Rl = self.G1 + lmbda * self.G2, self.R1 + self.H + lmbda * self.R2
+
+            P_primal = self.lqr.calculate_P(K, self.G1, self.R1)
+            P_dual = self.lqr.calculate_P(K, self.G2, self.R2)
+
+            if e % 10 == 0:
+                V_primal = self.sampler.estimate_V_rho_closed(P_primal, n_rho)
+                g = np.linalg.norm(V_primal_opt - V_primal)
+                gaps.append(g)
+                print(f"Episode {e}/{epochs} - Dual Gap {g} - Lambda {lmbda.detach().item()} - V {V_primal} \r", end='')
+
+            theta = self.policy_evaluation(K, Gl, Rl, n_pe)
+            K = self.primal_update(theta)
+            lmbda = self.dual_update(P_dual, lmbda, n_rho)
+        return gaps
