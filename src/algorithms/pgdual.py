@@ -8,6 +8,7 @@ import torch.nn as nn
 from src.dynamics import RobotWorld
 
 
+# The estimators used for the baseline are linear models
 class Actor(nn.Module):
     def __init__(self, ds: int, da: int) -> None:
         super(Actor, self).__init__()
@@ -32,6 +33,7 @@ class Critic(nn.Module):
         return q
 
 
+# This method implements the PGDual method presented as a baseline
 class LinearDual:
     def __init__(
         self,
@@ -103,6 +105,7 @@ class LinearDual:
         lmbda = zeros(1)
         loss_primal, loss_dual = [], []
 
+        # We solve the unconstrained MPD problem for a fixed Lagrangian multiplier
         for epoch in range(num_epochs):
             s, a = self.starting_pos_fn(num_samples)
             s_a = concat([s, a], dim=1)
@@ -118,6 +121,7 @@ class LinearDual:
             actor_loss.backward()
             self.actor_optimizer.step()
 
+            # Here we update the dual variable via a gradient step
             if epoch % num_dual_update == 0:
                 V_primal = self.rollout_V_primal(num_rollout, num_rho)
                 V_dual = self.rollout_V_dual(num_rollout, num_rho)

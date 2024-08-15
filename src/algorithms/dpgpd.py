@@ -7,6 +7,7 @@ from src.lqr import Lqr
 from src.sampling import Sampler
 
 
+# This class implements the D-PGPD algorithm for the exact case
 class Dpgpd:
     def __init__(
             self,
@@ -38,11 +39,13 @@ class Dpgpd:
         self.lqr = Lqr(env.A, env.B, gamma)
         self.sampler = Sampler(env, gamma)
 
+    # Primal update of D-PGPD in equation 6a
     def primal_update(self, R: Tensor, K: Tensor, P: Tensor) -> Tensor:
         H_odiag = self.gamma * self.env.B.T @ P @ self.env.A
         H_diag = R + self.gamma * self.env.B.T @ P @ self.env.B
         return - inverse(2 * H_diag + 2 * R - self.I_eta) @ (2 * H_odiag + self.I_eta @ K)
 
+    # Dual update of D-PGPD in equation 6b
     def dual_update(self, P: Tensor, lmbda: Tensor, n: int) -> Tensor:
         v = self.sampler.estimate_V_rho_closed(P, n)
         return clamp(lmbda - self.eta * (v - self.b + self.tau * lmbda), min=0)
@@ -64,6 +67,7 @@ class Dpgpd:
             print(f"Episode {e}/{epochs} - Return {loss_primal} \r", end='')
         return K, losses_primal, losses_dual
 
+    # Algorithm that updates the policy iteratively
     def train_constrained(self, epochs: int, n: int) -> Tuple[Tensor, List[float], List[float]]:
         losses_primal, losses_dual = [], []
         K = zeros(self.da, self.ds).double()

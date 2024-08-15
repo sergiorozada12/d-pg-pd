@@ -13,7 +13,7 @@ from src.sampling import Sampler
 
 RNG_SAMPLING = [-10, 10]
 
-
+# This class implements the AD-PGPD algorithm for the inexact case
 class ADpgpd:
     def __init__(
             self,
@@ -82,6 +82,7 @@ class ADpgpd:
         theta = lstsq(X, y, driver='gelsd').solution
         return theta
 
+    # This method implements the primal update in equation 9a
     def primal_update(self, theta: Tensor) -> Tensor:
         W_1 = zeros((self.da, self.ds))
         for i in range(self.da):
@@ -113,6 +114,7 @@ class ADpgpd:
         K = - inverse(W_2 - (self.tau + 1 / self.eta) * eye(self.da)) @ W_1
         return K.double()
 
+    # This method implements the dual update in equation 9b
     def dual_update(self, P: Tensor, lmbda: Tensor, n: int) -> Tensor:
         v = self.sampler.estimate_V_rho_closed(P, n)
         return clamp(lmbda - self.eta * (v - self.b + self.tau * lmbda), min=0)
@@ -137,6 +139,7 @@ class ADpgpd:
             print(f"Episode {e}/{epochs} - Return {loss_primal} \r", end='')
         return K, losses_primal, losses_dual
 
+    # This method iterates the primal and the dual update
     def train_constrained(self, epochs: int, n_pe: int, n_rho: int) -> Tuple[Tensor, Tensor, List[float], List[float]]:
         losses_primal, losses_dual = [], []
         theta = zeros((self.ds + self.da)**2)
